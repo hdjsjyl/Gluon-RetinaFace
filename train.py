@@ -47,6 +47,8 @@ def train_net(config):
     else:
         net.load_model(pretrain_prefix)
 
+    print('hello github!')
+
 
 
 
