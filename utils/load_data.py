@@ -1,7 +1,7 @@
 from dataset import *
 
 import numpy as np
-
+import os
 
 
 def load_gt_roidb(dataset, image_set, root_path='', dataset_path='', flip=False):

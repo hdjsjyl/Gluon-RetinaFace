@@ -24,7 +24,6 @@ class widerface(IMDB):
         self._dataset_path = dataset_path
         self._imgs_path    = os.path.join(self._dataset_path, image_set, 'images')
 
-
         self._fp_bbox_map  = {}
         self._label_file   = os.path.join(self._dataset_path, image_set, 'label.txt')
         temp_name = None

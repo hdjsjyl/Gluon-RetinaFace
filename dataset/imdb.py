@@ -12,6 +12,7 @@ basic format [image_index]
 from ..bbox_process.bbox_transform import bbox_overlaps
 
 import os
+import cv2
 import numpy as np
 try:
     import cPickle as pickle
