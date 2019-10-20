@@ -2,7 +2,7 @@ from __future__ import print_function
 from mxnet.gluon import nn, loss as gloss
 from mxnet import autograd, nd, init
 from utils.patch_config import patch_config_as_nothrow
-
+from utils.load_data import load_gt_roidb, merge_roidb, filter_roidb
 
 
 import numpy as np
@@ -32,13 +32,24 @@ def train_net(config):
         ctx = [mx.cpu()]
     else:
         ctx = [mx.gpu(i) for i in gpus]
-    pretrain_prefix = pModel.pretrain.prefix
-    pretrain_epoch  = pModel.pretrain.epoch
-    save_path       = os.path.join('experiments', pGen.name)
-    model_prefix    = os.path.join(save_path, 'checkpoint')
-    begin_epoch     = pOpt.schedule.begin_epoch
-    end_epoch       = pOpt.schedule.end_epoch
-    lr_steps        = pOpt.schedule.lr_steps
+
+    input_batch_size = pKv.batch_image * len(ctx)
+    pretrain_prefix  = pModel.pretrain.prefix
+    pretrain_epoch   = pModel.pretrain.epoch
+    save_path        = os.path.join('experiments', pGen.name)
+    model_prefix     = os.path.join(save_path, 'checkpoint')
+    begin_epoch      = pOpt.schedule.begin_epoch
+    end_epoch        = pOpt.schedule.end_epoch
+    lr_steps         = pOpt.schedule.lr_steps
+
+
+    ## load dataset
+    if pDataset.Dataset == 'widerface':
+        image_set = pDataset.image_set
+        roidb = load_gt_roidb(pDataset.Dataset, image_set, root_path='data', dataset_path='data/widerface', flip=True)
+
+
+
 
     net = pModel.train_network
 

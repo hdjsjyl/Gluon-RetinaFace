@@ -165,9 +165,23 @@ def generate_config(is_train):
         short     = 640
         long      = 640
 
-    class ColorParam:
+    class AugUseParam:
         color_mode      = 2
         color_jittering = 0.125
+        min_bbox_size   = 0
+        bbox_mask_thr   = min_bbox_size
+        aspect_grouping = False
+        use_blur        = False
+        use_crop        = True
+        face_landmark   = False
+        use_occlusion   = False
+        more_small_box  = True
+        head_box        = False
+        dense_anchor    = False
+        use_maxout      = 0
+        use_3d          = False
+
+
 
     class PadParam:
         pre_short = ResizeParam.pre_short
