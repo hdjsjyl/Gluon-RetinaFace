@@ -170,4 +170,101 @@ def iou_tranform(ex_rois, gt_rois):
     return gt_rois
 
 
-def iou_pred():
+def iou_pred(boxes, box_deltas):
+    """
+    Transform the set of class-agnostic boxes into class-specific boxes
+    by applying the predicted offsets (box_deltas)
+    :param boxes: !important [N 4]
+    :param box_deltas: [N, 4 * num_classes]
+    :return: [N 4 * num_classes]
+    """
+    if boxes.shape[0] == 0:
+        return np.zeros((0, box_deltas.shape[1]))
+
+    boxes = boxes.astype(np.float, copy=False)
+    x1 = boxes[:, 0]
+    y1 = boxes[:, 1]
+    x2 = boxes[:, 2]
+    y2 = boxes[:, 3]
+
+    dx1 = box_deltas[:, 0::4]
+    dy1 = box_deltas[:, 1::4]
+    dx2 = box_deltas[:, 2::4]
+    dy2 = box_deltas[:, 3::4]
+
+    pred_boxes = np.zeros(box_deltas.shape)
+    # x1
+    pred_boxes[:, 0::4] = dx1 + x1[:, np.newaxis]
+    # y1
+    pred_boxes[:, 1::4] = dy1 + y1[:, np.newaxis]
+    # x2
+    pred_boxes[:, 2::4] = dx2 + x2[:, np.newaxis]
+    # y2
+    pred_boxes[:, 3::4] = dy2 + y2[:, np.newaxis]
+
+    return pred_boxes
+
+
+# define bbox_transform and bbox_pred
+bbox_transform = nonlinear_transform
+bbox_pred      = nonlinear_pred
+
+
+def flip_boxes(boxes, im_width):
+    """Flip boxes horizontally."""
+    box_flipped = boxes.copy()
+    boxes[:, 0::4] = im_width - box_flipped[:, 2::4] - 1.0
+    boxes[:, 2::4] = im_width - box_flipped[:, 0::4] - 1.0
+    return box_flipped
+
+
+def box_voting(top_dets, all_dets, thresh=0.5, scoring_method='ID', beta=1.0):
+    """Apply bounding-box voting to refine `top_dets` by voting with `all_dets`.
+    See: https://arxiv.org/abs/1505.01749. Optional score averaging (not in the
+    referenced  paper) can be applied by setting `scoring_method` appropriately.
+    """
+    # top_dets is [N, 5] each row is [x1 y1 x2 y2, sore]
+    # all_dets is [N, 5] each row is [x1 y1 x2 y2, sore]
+    top_dets_out = top_dets.copy()
+    top_boxes = top_dets[:, :4]
+    all_boxes = all_dets[:, :4]
+    all_scores = all_dets[:, 4]
+    top_to_all_overlaps = bbox_overlaps(top_boxes, all_boxes)
+    for k in range(top_dets_out.shape[0]):
+        inds_to_vote = np.where(top_to_all_overlaps[k] >= thresh)[0]
+        boxes_to_vote = all_boxes[inds_to_vote, :]
+        ws = all_scores[inds_to_vote]
+        top_dets_out[k, :4] = np.average(boxes_to_vote, axis=0, weights=ws)
+        if scoring_method == 'ID':
+            # Identity, nothing to do
+            pass
+        elif scoring_method == 'TEMP_AVG':
+            # Average probabilities (considered as P(detected class) vs.
+            # P(not the detected class)) after smoothing with a temperature
+            # hyperparameter.
+            P = np.vstack((ws, 1.0 - ws))
+            P_max = np.max(P, axis=0)
+            X = np.log(P / P_max)
+            X_exp = np.exp(X / beta)
+            P_temp = X_exp / np.sum(X_exp, axis=0)
+            P_avg = P_temp[0].mean()
+            top_dets_out[k, 4] = P_avg
+        elif scoring_method == 'AVG':
+            # Combine new probs from overlapping boxes
+            top_dets_out[k, 4] = ws.mean()
+        elif scoring_method == 'IOU_AVG':
+            P = ws
+            ws = top_to_all_overlaps[k, inds_to_vote]
+            P_avg = np.average(P, weights=ws)
+            top_dets_out[k, 4] = P_avg
+        elif scoring_method == 'GENERALIZED_AVG':
+            P_avg = np.mean(ws**beta)**(1.0 / beta)
+            top_dets_out[k, 4] = P_avg
+        elif scoring_method == 'QUASI_SUM':
+            top_dets_out[k, 4] = ws.sum() / float(len(ws))**beta
+        else:
+            raise NotImplementedError(
+                'Unknown scoring method {}'.format(scoring_method)
+            )
+
+    return top_dets_out
